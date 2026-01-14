@@ -63,6 +63,14 @@
             this.load.image('fondoGranja', './unnamed.jpg');
             // Usamos el archivo PNG que permite transparencia
             this.load.image('escopeta', './akiro-art-gun-shoot.png');
+            // Nuevo asset de cañón
+            this.load.image('canon', './retro-pixel-art-cannon-illustration-vintage-game-style-weapon_1292377-24682.png');
+
+            // Cargar frames de la animación de la gallina
+            this.load.image('gallina1', './gallina1.jpg');
+            this.load.image('gallina2', './gallina2.jpg');
+            this.load.image('gallina3', './gallina3.jpg');
+            this.load.image('gallina4', './gallina4.jpg');
         }
 
         /**
@@ -76,23 +84,44 @@
             // Ajustamos el tamaño para asegurarnos que cubra 800x600 (opcional, por si la imagen es de otro tamaño)
             fondo.setDisplaySize(800, 600);
 
-            // 2. CREAR PERSONAJE (CÍRCULO ROJO)
-            personaje = this.add.circle(50, 300, 20, 0xff0000);
+            // 2. CREAR PERSONAJE (GALLINA ANIMADA)
+            // Crear la animación
+            this.anims.create({
+                key: 'caminar',
+                frames: [
+                    { key: 'gallina1' },
+                    { key: 'gallina2' },
+                    { key: 'gallina3' },
+                    { key: 'gallina4' }
+                ],
+                frameRate: 4,
+                repeat: -1 // -1 significa loop infinito
+            });
 
-            // 3. AÑADIR ESCOPETA (Primer plano)
+            // Crear el sprite usando el primer frame por defecto
+            personaje = this.add.sprite(50, 300, 'gallina1');
+            personaje.play('caminar'); // Reproducir la animación
+            personaje.setScale(0.5); // Ajuste de escala provisional, asumimos que son grandes
+
+            // 3. AÑADIR CAÑÓN (Centro Izquierda)
+            const canon = this.add.image(120, 300, 'canon'); // Movido a la derecha (50 -> 120)
+            canon.setScale(0.2); // Reducido tamaño más (0.35 -> 0.2)
+            // Si el sprite mira a la derecha por defecto, está bien. Si no, ajustar angle/flipX.
+
+            // 4. AÑADIR ESCOPETA (Primer plano - Restaurada)
             // Usamos setOrigin(0.5, 1) para que el punto de anclaje sea: Centro Horizontal, Abajo Vertical
             // Así al ponerla en y=600, se queda pegada al borde inferior.
             escopeta = this.add.image(400, 600, 'escopeta');
             escopeta.setOrigin(0.5, 1);
-            escopeta.setScale(0.8); // Ajustamos escala (puedes cambiar esto)
+            escopeta.setScale(0.5); // Reducido tamaño (0.8 -> 0.5)
 
             // Guardamos la posición Y base para el retroceso
             const posY_base = 600;
 
-            // 4. INTERACCIÓN (DISPARO)
+            // 5. INTERACCIÓN (DISPARO)
             // Escuchamos el evento de clic en cualquier parte de la pantalla
             this.input.on('pointerdown', () => {
-                // Animación de RETROCESO (Recoil)
+                // Animación de RETROCESO (Recoil) de la ESCOPETA
                 // Detenemos cualquier tween anterior
                 this.tweens.killTweensOf(escopeta);
                 escopeta.y = posY_base;
@@ -101,8 +130,6 @@
                 this.tweens.add({
                     targets: escopeta,
                     y: posY_base + 40, // Simulamos el golpe hacia "atrás" (abajo de la pantalla)
-                    // Al estar anclada abajo, esto la esconde un poco.
-                    // Si quieres que "salte" hacia arriba, usa: posY_base - 40
                     duration: 50,
                     yoyo: true // Vuelve a la posición original
                 });
