@@ -1,0 +1,14 @@
+{
+  "name": "chicken-shooter",
+  "version": "1.0.0",
+  "description": "Juego de disparos a gallinas con Phaser 3",
+  "scripts": {
+    "dev": "http-server -p 8000 -o"
+  },
+  "keywords": ["phaser", "game", "chicken-shooter"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

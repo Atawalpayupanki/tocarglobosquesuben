@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Sonidos para Chicken Shooter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+
+        .sound-generator {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        .preview {
+            background: #007bff;
+        }
+
+        .preview:hover {
+            background: #0056b3;
+        }
+
+        h2 {
+            color: #333;
+        }
+
+        p {
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔊 Generador de Sonidos - Chicken Shooter</h1>
+    <p>Haz clic en "Generar" para crear cada archivo de sonido. Luego haz clic en "Previsualizar" para escucharlo.</p>
+
+    <div class="sound-generator">
+        <h2>🔫 Disparo de Escopeta</h2>
+        <p>Sonido de disparo con explosión y reverberación</p>
+        <button onclick="previewShot()">🔊 Previsualizar</button>
+        <button onclick="generateShot()">💾 Generar disparo.mp3</button>
+    </div>
+
+    <div class="sound-generator">
+        <h2>💥 Impacto de Gallina</h2>
+        <p>Sonido de impacto con cloqueo de muerte</p>
+        <button onclick="previewHit()">🔊 Previsualizar</button>
+        <button onclick="generateHit()">💾 Generar impacto_gallina.mp3</button>
+    </div>
+
+    <div class="sound-generator">
+        <h2>🐔 Cloqueo de Gallina</h2>
+        <p>Sonido ambiente de gallina viva</p>
+        <button onclick="previewCluck()">🔊 Previsualizar</button>
+        <button onclick="generateCluck()">💾 Generar cloqueo_gallina.mp3</button>
+    </div>
+
+    <script>
+        // Contexto de audio
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        // ============================================
+        // SONIDO DE DISPARO DE ESCOPETA
+        // ============================================
+        function createShotSound(destination) {
+            const duration = 0.5;
+            const sampleRate = audioContext.sampleRate;
+            const length = sampleRate * duration;
+            const buffer = audioContext.createBuffer(1, length, sampleRate);
+            const data = buffer.getChannelData(0);
+
+            // Generar ruido blanco con envolvente
+            for (let i = 0; i < length; i++) {
+                const t = i / sampleRate;
+                const envelope = Math.exp(-t * 15); // Decaimiento rápido
+                data[i] = (Math.random() * 2 - 1) * envelope * 0.8;
+            }
+
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+
+            // Filtro para dar carácter de explosión
+            const filter = audioContext.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 800;
+            filter.Q.value = 1;
+
+            // Ganancia
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = 0.6;
+
+            source.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(destination);
+
+            return source;
+        }
+
+        function previewShot() {
+            const source = createShotSound(audioContext.destination);
+            source.start();
+        }
+
+        async function generateShot() {
+            const offlineContext = new OfflineAudioContext(1, 44100 * 0.5, 44100);
+            const source = createShotSound(offlineContext.destination);
+            source.start();
+
+            const buffer = await offlineContext.startRendering();
+            downloadSound(buffer, 'disparo.mp3');
+        }
+
+        // ============================================
+        // SONIDO DE IMPACTO DE GALLINA
+        // ============================================
+        function createHitSound(destination) {
+            const duration = 0.4;
+            const sampleRate = audioContext.sampleRate;
+            const length = sampleRate * duration;
+            const buffer = audioContext.createBuffer(1, length, sampleRate);
+            const data = buffer.getChannelData(0);
+
+            // Combinación de ruido y tonos para simular cloqueo + impacto
+            for (let i = 0; i < length; i++) {
+                const t = i / sampleRate;
+                const envelope = Math.exp(-t * 12);
+
+                // Ruido de impacto
+                const noise = (Math.random() * 2 - 1) * 0.3;
+
+                // Tono descendente (cloqueo)
+                const freq = 600 - (t * 400);
+                const tone = Math.sin(2 * Math.PI * freq * t) * 0.4;
+
+                data[i] = (noise + tone) * envelope;
+            }
+
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = 0.5;
+
+            source.connect(gainNode);
+            gainNode.connect(destination);
+
+            return source;
+        }
+
+        function previewHit() {
+            const source = createHitSound(audioContext.destination);
+            source.start();
+        }
+
+        async function generateHit() {
+            const offlineContext = new OfflineAudioContext(1, 44100 * 0.4, 44100);
+            const source = createHitSound(offlineContext.destination);
+            source.start();
+
+            const buffer = await offlineContext.startRendering();
+            downloadSound(buffer, 'impacto_gallina.mp3');
+        }
+
+        // ============================================
+        // SONIDO DE CLOQUEO DE GALLINA
+        // ============================================
+        function createCluckSound(destination) {
+            const duration = 0.6;
+            const sampleRate = audioContext.sampleRate;
+            const length = sampleRate * duration;
+            const buffer = audioContext.createBuffer(1, length, sampleRate);
+            const data = buffer.getChannelData(0);
+
+            // Cloqueo: serie de pulsos tonales
+            for (let i = 0; i < length; i++) {
+                const t = i / sampleRate;
+                const envelope = Math.exp(-t * 5) * (1 - Math.exp(-t * 50));
+
+                // Frecuencia modulada para simular cloqueo
+                const modulation = Math.sin(2 * Math.PI * 8 * t) * 100;
+                const freq = 500 + modulation;
+                const tone = Math.sin(2 * Math.PI * freq * t);
+
+                // Añadir armónicos
+                const harmonic = Math.sin(2 * Math.PI * freq * 2 * t) * 0.3;
+
+                data[i] = (tone + harmonic) * envelope * 0.5;
+            }
+
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = 0.4;
+
+            source.connect(gainNode);
+            gainNode.connect(destination);
+
+            return source;
+        }
+
+        function previewCluck() {
+            const source = createCluckSound(audioContext.destination);
+            source.start();
+        }
+
+        async function generateCluck() {
+            const offlineContext = new OfflineAudioContext(1, 44100 * 0.6, 44100);
+            const source = createCluckSound(offlineContext.destination);
+            source.start();
+
+            const buffer = await offlineContext.startRendering();
+            downloadSound(buffer, 'cloqueo_gallina.mp3');
+        }
+
+        // ============================================
+        // FUNCIÓN PARA DESCARGAR SONIDOS
+        // ============================================
+        function downloadSound(buffer, filename) {
+            // Convertir AudioBuffer a WAV
+            const wav = audioBufferToWav(buffer);
+            const blob = new Blob([wav], { type: 'audio/wav' });
+
+            // Crear enlace de descarga
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename.replace('.mp3', '.wav'); // Guardamos como WAV
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            alert(`✅ ${filename.replace('.mp3', '.wav')} generado! Guárdalo en la carpeta 'assets/'`);
+        }
+
+        // Convertir AudioBuffer a formato WAV
+        function audioBufferToWav(buffer) {
+            const length = buffer.length * buffer.numberOfChannels * 2 + 44;
+            const arrayBuffer = new ArrayBuffer(length);
+            const view = new DataView(arrayBuffer);
+            const channels = [];
+            let offset = 0;
+            let pos = 0;
+
+            // Escribir encabezado WAV
+            setUint32(0x46464952); // "RIFF"
+            setUint32(length - 8); // file length - 8
+            setUint32(0x45564157); // "WAVE"
+            setUint32(0x20746d66); // "fmt " chunk
+            setUint32(16); // length = 16
+            setUint16(1); // PCM (uncompressed)
+            setUint16(buffer.numberOfChannels);
+            setUint32(buffer.sampleRate);
+            setUint32(buffer.sampleRate * 2 * buffer.numberOfChannels); // avg. bytes/sec
+            setUint16(buffer.numberOfChannels * 2); // block-align
+            setUint16(16); // 16-bit
+            setUint32(0x61746164); // "data" - chunk
+            setUint32(length - pos - 4); // chunk length
+
+            // Escribir datos de audio
+            for (let i = 0; i < buffer.numberOfChannels; i++) {
+                channels.push(buffer.getChannelData(i));
+            }
+
+            while (pos < length) {
+                for (let i = 0; i < buffer.numberOfChannels; i++) {
+                    let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+                    sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+                    view.setInt16(pos, sample, true);
+                    pos += 2;
+                }
+                offset++;
+            }
+
+            return arrayBuffer;
+
+            function setUint16(data) {
+                view.setUint16(pos, data, true);
+                pos += 2;
+            }
+
+            function setUint32(data) {
+                view.setUint32(pos, data, true);
+                pos += 4;
+            }
+        }
+    </script>
+</body>
+
+</html>

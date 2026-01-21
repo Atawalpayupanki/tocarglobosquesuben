@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐔 Caza Gallinas - Chicken Shooter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            overflow: hidden;
+        }
+
+        #game-container {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+    <!-- Phaser 3 CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
+</head>
+
+<body>
+    <div id="game-container"></div>
+
+    <script>
+        // ===========================================
+        // 🐔 CAZA GALLINAS - Chicken Shooter Game
+        // Desarrollado con Phaser 3
+        // ===========================================
+
+        // Configuración del juego
+        const CONFIG = {
+            width: 1024,
+            height: 576,
+            initialSpawnDelay: 2000,    // Tiempo inicial entre gallinas (ms)
+            minSpawnDelay: 500,         // Tiempo mínimo entre gallinas
+            spawnAcceleration: 50,      // Reducción del delay por cada gallina
+            chickenSpeed: { min: 150, max: 300 },
+            pointsRange: { min: 10, max: 20 },
+            maxLives: 3,
+            recoilAmount: 15,
+            recoilDuration: 100
+        };
+
+        // Escena principal del juego
+        class GameScene extends Phaser.Scene {
+            constructor() {
+                super({ key: 'GameScene' });
+                this.score = 0;
+                this.lives = CONFIG.maxLives;
+                this.currentSpawnDelay = CONFIG.initialSpawnDelay;
+                this.gameOver = false;
+                this.shotgunBaseY = 0;
+            }
+
+            // =========================================
+            // PRELOAD: Cargar todos los recursos
+            // =========================================
+            preload() {
+                // Mostrar barra de carga
+                this.createLoadingBar();
+
+                // Cargar imágenes
+                this.load.image('fondo', 'assets/fondo.png');
+
+                // Cargar imágenes de la escopeta para animación
+                this.load.image('escopeta1', 'assets/escopeta1-removebg-preview.png');
+                this.load.image('escopeta2', 'assets/escopeta2-removebg-preview.png');
+                this.load.image('escopeta3', 'assets/escopeta3-removebg-preview.png');
+                this.load.image('escopeta4', 'assets/escopeta4.png');
+
+                this.load.image('mira', 'assets/mira.png');
+
+                // Cargar frames de explosión
+                this.load.image('explosion1', 'assets/explosion1.png');
+                this.load.image('explosion2', 'assets/explosion2.png');
+                this.load.image('explosion3', 'assets/explosion3.png');
+                this.load.image('explosion4', 'assets/explosion4.png');
+
+                // Cargar frames de gallina
+                this.load.image('gallina1', 'assets/gallina1.png');
+                this.load.image('gallina2', 'assets/gallina2.png');
+                this.load.image('gallina3', 'assets/gallina3.png');
+                this.load.image('gallina4', 'assets/gallina4.png');
+            }
+
+            createLoadingBar() {
+                const width = this.cameras.main.width;
+                const height = this.cameras.main.height;
+
+                const progressBar = this.add.graphics();
+                const progressBox = this.add.graphics();
+                progressBox.fillStyle(0x222222, 0.8);
+                progressBox.fillRect(width / 2 - 160, height / 2 - 25, 320, 50);
+
+                const loadingText = this.add.text(width / 2, height / 2 - 50, 'Cargando...', {
+                    font: '20px Arial',
+                    fill: '#ffffff'
+                }).setOrigin(0.5);
+
+                this.load.on('progress', (value) => {
+                    progressBar.clear();
+                    progressBar.fillStyle(0xffffff, 1);
+                    progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300 * value, 30);
+                });
+
+                this.load.on('complete', () => {
+                    progressBar.destroy();
+                    progressBox.destroy();
+                    loadingText.destroy();
+                });
+            }
+
+            // Crear assets faltantes con gráficos
+            createMissingAssets() {
+                // Crear pluma
+                const featherGraphics = this.add.graphics();
+                featherGraphics.fillStyle(0xffffff);
+                featherGraphics.fillEllipse(32, 32, 16, 50);
+                featherGraphics.lineStyle(2, 0x999999);
+                featherGraphics.lineBetween(32, 12, 32, 52);
+                featherGraphics.generateTexture('pluma', 64, 64);
+                featherGraphics.destroy();
+            }
+
+            // =========================================
+            // CREATE: Inicializar el juego
+            // =========================================
+            create() {
+                // Crear assets faltantes
+                this.createMissingAssets();
+
+                // Fondo
+                this.add.image(CONFIG.width / 2, CONFIG.height / 2, 'fondo')
+                    .setDisplaySize(CONFIG.width, CONFIG.height);
+
+                // Grupo de gallinas con física
+                this.chickens = this.physics.add.group();
+
+                // Sistema de partículas para plumas
+                this.createFeatherParticles();
+
+                // Escopeta
+                this.shotgunBaseY = CONFIG.height;
+                this.shotgun = this.add.sprite(CONFIG.width / 2, this.shotgunBaseY, 'escopeta1')
+                    .setScale(0.5)
+                    .setOrigin(0.5, 1)
+                    .setDepth(100);
+
+                // ANIMACIONES
+                // 1. Disparo
+                this.anims.create({
+                    key: 'shoot_anim',
+                    frames: [
+                        { key: 'escopeta1' },
+                        { key: 'escopeta2' },
+                        { key: 'escopeta3' },
+                        { key: 'escopeta4' },
+                        { key: 'escopeta1' }
+                    ],
+                    frameRate: 15,
+                    repeat: 0
+                });
+
+                // 2. Gallina volando
+                this.anims.create({
+                    key: 'gallina_fly',
+                    frames: [
+                        { key: 'gallina1' },
+                        { key: 'gallina2' },
+                        { key: 'gallina3' },
+                        { key: 'gallina4' }
+                    ],
+                    frameRate: 8,
+                    repeat: -1,
+                    yoyo: true
+                });
+
+                // 3. Explosión
+                this.anims.create({
+                    key: 'explosion_anim',
+                    frames: [
+                        { key: 'explosion1' },
+                        { key: 'explosion2' },
+                        { key: 'explosion3' },
+                        { key: 'explosion4' }
+                    ],
+                    frameRate: 12,
+                    repeat: 0,
+                    hideOnComplete: true
+                });
+
+                // Mira
+                this.crosshair = this.add.image(0, 0, 'mira')
+                    .setScale(0.15)
+                    .setDepth(200);
+
+                // Ocultar cursor
+                this.input.setDefaultCursor('none');
+
+                // UI: Puntuación
+                this.scoreText = this.add.text(20, 20, '🎯 Puntos: 0', {
+                    fontSize: '28px',
+                    fontFamily: 'Arial Black, sans-serif',
+                    fill: '#ffffff',
+                    stroke: '#000000',
+                    strokeThickness: 4,
+                    shadow: { blur: 5, color: '#000000', fill: true }
+                }).setDepth(300);
+
+                // UI: Vidas
+                this.livesText = this.add.text(20, 60, this.getLivesDisplay(), {
+                    fontSize: '28px',
+                    fontFamily: 'Arial',
+                    fill: '#ff4444',
+                    stroke: '#000000',
+                    strokeThickness: 3
+                }).setDepth(300);
+
+                // Disparo
+                this.input.on('pointerdown', (pointer) => {
+                    if (!this.gameOver && pointer.leftButtonDown()) {
+                        this.shoot(pointer);
+                    }
+                });
+
+                // Timer
+                this.spawnTimer = this.time.addEvent({
+                    delay: this.currentSpawnDelay,
+                    callback: this.spawnChicken,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                this.time.delayedCall(500, () => this.spawnChicken());
+            }
+
+            // Crear sistema de partículas de plumas
+            createFeatherParticles() {
+                this.featherEmitter = this.add.particles(0, 0, 'pluma', {
+                    speed: { min: 50, max: 200 },
+                    angle: { min: 0, max: 360 },
+                    scale: { start: 0.3, end: 0.1 },
+                    lifespan: 1500,
+                    gravityY: 100,
+                    rotate: { min: 0, max: 360 },
+                    emitting: false
+                });
+                this.featherEmitter.setDepth(50);
+            }
+
+            // Obtener display de vidas
+            getLivesDisplay() {
+                return '❤️'.repeat(this.lives) + '🖤'.repeat(CONFIG.maxLives - this.lives);
+            }
+
+            // =========================================
+            // SPAWN: Generar gallinas
+            // =========================================
+            spawnChicken() {
+                if (this.gameOver) return;
+
+                // Decidir si viene de izquierda o derecha
+                const fromLeft = Phaser.Math.Between(0, 1) === 0;
+                const startX = fromLeft ? -80 : CONFIG.width + 80;
+                const startY = Phaser.Math.Between(80, CONFIG.height - 200);
+
+                // Velocidad aleatoria
+                const speed = Phaser.Math.Between(CONFIG.chickenSpeed.min, CONFIG.chickenSpeed.max);
+                const velocityX = fromLeft ? speed : -speed;
+
+                // Crear gallina usando animación
+                const chicken = this.chickens.create(startX, startY, 'gallina1');
+                chicken.play('gallina_fly'); // Reproducir animación
+
+                chicken.setScale(0.4);
+                chicken.setVelocityX(velocityX);
+                chicken.setInteractive({ useHandCursor: false });
+                chicken.fromLeft = fromLeft;
+
+                // Flip si va hacia la izquierda (asumiendo que las imágenes miran a la derecha por defecto)
+                // Si las imágenes originales miran a la derecha, flipX true lo hace mirar a la izquierda
+                if (!fromLeft) {
+                    chicken.setFlipX(true);
+                }
+
+                // Ajustar hitbox
+                chicken.body.setSize(chicken.width * 0.8, chicken.height * 0.8);
+                chicken.body.setOffset(chicken.width * 0.1, chicken.height * 0.1);
+
+                // Pequeño movimiento vertical oscilante
+                this.tweens.add({
+                    targets: chicken,
+                    y: startY + Phaser.Math.Between(-30, 30),
+                    duration: 500,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+
+                // Acelerar spawn
+                if (this.currentSpawnDelay > CONFIG.minSpawnDelay) {
+                    this.currentSpawnDelay -= CONFIG.spawnAcceleration;
+                    this.spawnTimer.delay = Math.max(this.currentSpawnDelay, CONFIG.minSpawnDelay);
+                }
+            }
+
+            // =========================================
+            // SHOOT: Lógica de disparo
+            // =========================================
+            shoot(pointer) {
+                // Reproducir animación de disparo de la escopeta
+                this.shotgun.play('shoot_anim');
+
+                // Detectar si impactó alguna gallina
+                let hitChicken = null;
+
+                this.chickens.getChildren().forEach((chicken) => {
+                    if (chicken.active && chicken.getBounds().contains(pointer.x, pointer.y)) {
+                        hitChicken = chicken;
+                    }
+                });
+
+                if (hitChicken) {
+                    this.killChicken(hitChicken);
+                }
+            }
+
+            // Eliminar gallina impactada
+            killChicken(chicken) {
+                const x = chicken.x;
+                const y = chicken.y;
+                const isFlipped = chicken.flipX;
+
+                // Emitir partículas de plumas
+                this.featherEmitter.setPosition(x, y);
+                this.featherEmitter.explode(15);
+
+                // Reproducir animación de explosión
+                const explosion = this.add.sprite(x, y, 'explosion1')
+                    .setScale(0.5)
+                    .setDepth(40)
+                    .setFlipX(isFlipped); // Mantener la misma orientación que la gallina
+
+                explosion.play('explosion_anim');
+
+                // Destruir explosión al terminar animación
+                explosion.on('animationcomplete', () => {
+                    explosion.destroy();
+                });
+
+                // Destruir la gallina original
+                chicken.destroy();
+
+                // Sumar puntos
+                const points = Phaser.Math.Between(CONFIG.pointsRange.min, CONFIG.pointsRange.max);
+                this.score += points;
+                this.scoreText.setText(`🎯 Puntos: ${this.score}`);
+
+                // Mostrar puntos flotantes
+                this.showFloatingPoints(x, y, points);
+            }
+
+            // Mostrar puntos flotantes
+            showFloatingPoints(x, y, points) {
+                const pointsText = this.add.text(x, y - 30, `+${points}`, {
+                    fontSize: '24px',
+                    fontFamily: 'Arial Black',
+                    fill: '#ffff00',
+                    stroke: '#000000',
+                    strokeThickness: 3
+                }).setOrigin(0.5).setDepth(150);
+
+                this.tweens.add({
+                    targets: pointsText,
+                    y: y - 80,
+                    alpha: 0,
+                    duration: 800,
+                    ease: 'Power2',
+                    onComplete: () => pointsText.destroy()
+                });
+            }
+
+            // =========================================
+            // UPDATE: Bucle principal del juego
+            // =========================================
+            update() {
+                if (this.gameOver) return;
+
+                // Actualizar posición de la mira
+                this.crosshair.setPosition(this.input.x, this.input.y);
+
+                // Verificar gallinas que salen de pantalla
+                this.chickens.getChildren().forEach((chicken) => {
+                    if (chicken.active) {
+                        const outOfBounds = (chicken.fromLeft && chicken.x > CONFIG.width + 100) ||
+                            (!chicken.fromLeft && chicken.x < -100);
+
+                        if (outOfBounds) {
+                            chicken.destroy();
+                            this.loseLife();
+                        }
+                    }
+                });
+            }
+
+            // Perder una vida
+            loseLife() {
+                this.lives--;
+                this.livesText.setText(this.getLivesDisplay());
+
+                // Efecto de pantalla roja
+                this.cameras.main.flash(200, 255, 0, 0, true);
+
+                if (this.lives <= 0) {
+                    this.triggerGameOver();
+                }
+            }
+
+            // Activar Game Over
+            triggerGameOver() {
+                this.gameOver = true;
+                this.spawnTimer.remove();
+
+                // Oscurecer pantalla
+                const overlay = this.add.rectangle(
+                    CONFIG.width / 2, CONFIG.height / 2,
+                    CONFIG.width, CONFIG.height,
+                    0x000000, 0.7
+                ).setDepth(400);
+
+                // Texto de Game Over
+                const gameOverText = this.add.text(CONFIG.width / 2, CONFIG.height / 2 - 50, '💀 GAME OVER 💀', {
+                    fontSize: '64px',
+                    fontFamily: 'Arial Black',
+                    fill: '#ff0000',
+                    stroke: '#000000',
+                    strokeThickness: 6
+                }).setOrigin(0.5).setDepth(401);
+
+                // Puntuación final
+                const finalScore = this.add.text(CONFIG.width / 2, CONFIG.height / 2 + 30, `Puntuación Final: ${this.score}`, {
+                    fontSize: '32px',
+                    fontFamily: 'Arial',
+                    fill: '#ffffff',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                }).setOrigin(0.5).setDepth(401);
+
+                // Botón de reinicio
+                const restartBtn = this.add.text(CONFIG.width / 2, CONFIG.height / 2 + 100, '🔄 REINICIAR', {
+                    fontSize: '28px',
+                    fontFamily: 'Arial Black',
+                    fill: '#00ff00',
+                    stroke: '#000000',
+                    strokeThickness: 4,
+                    backgroundColor: '#333333',
+                    padding: { x: 20, y: 10 }
+                }).setOrigin(0.5).setDepth(401).setInteractive({ useHandCursor: true });
+
+                restartBtn.on('pointerover', () => restartBtn.setScale(1.1));
+                restartBtn.on('pointerout', () => restartBtn.setScale(1));
+                restartBtn.on('pointerdown', () => {
+                    this.scene.restart();
+                    this.score = 0;
+                    this.lives = CONFIG.maxLives;
+                    this.currentSpawnDelay = CONFIG.initialSpawnDelay;
+                    this.gameOver = false;
+                });
+
+                // Mostrar cursor normal para el botón
+                this.input.setDefaultCursor('default');
+            }
+        }
+
+        // =========================================
+        // Configuración de Phaser
+        // =========================================
+        const config = {
+            type: Phaser.AUTO,
+            width: CONFIG.width,
+            height: CONFIG.height,
+            parent: 'game-container',
+            backgroundColor: '#87CEEB',
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 },
+                    debug: false
+                }
+            },
+            scene: GameScene
+        };
+
+        // Iniciar juego
+        const game = new Phaser.Game(config);
+
+    </script>
+</body>
+
+</html>
