@@ -237,14 +237,9 @@
                     strokeThickness: 3
                 }).setDepth(300);
 
-                // UI: Munición
-                this.ammoText = this.add.text(20, 100, this.getAmmoDisplay(), {
-                    fontSize: '24px',
-                    fontFamily: 'Arial Black',
-                    fill: '#ffcc00',
-                    stroke: '#000000',
-                    strokeThickness: 3
-                }).setDepth(300);
+                // UI: Munición Visual (Abajo a la derecha)
+                this.ammoIcons = [];
+                this.createAmmoHUD();
 
                 // Disparo
                 this.input.on('pointerdown', (pointer) => {
