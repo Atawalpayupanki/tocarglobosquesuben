@@ -98,6 +98,10 @@
                 this.load.image('gallina2', 'assets/gallina2.png');
                 this.load.image('gallina3', 'assets/gallina3.png');
                 this.load.image('gallina4', 'assets/gallina4.png');
+
+                // Cargar balas
+                this.load.image('bala_cargada', 'assets/bala_cargada.png');
+                this.load.image('bala_gastada', 'assets/bala_gastada.png');
             }
 
             createLoadingBar() {
@@ -287,6 +291,32 @@
                 this.featherEmitter.setDepth(50);
             }
 
+            // Crear HUD de munición
+            createAmmoHUD() {
+                const startX = CONFIG.width - 40;
+                const startY = CONFIG.height - 40;
+                const spacing = 30;
+
+                for (let i = 0; i < CONFIG.maxAmmo; i++) {
+                    const icon = this.add.image(startX - (i * spacing), startY, 'bala_cargada')
+                        .setScale(0.8)
+                        .setDepth(300);
+                    this.ammoIcons.push(icon);
+                }
+                this.updateAmmoHUD();
+            }
+
+            // Actualizar HUD de munición
+            updateAmmoHUD() {
+                this.ammoIcons.forEach((icon, index) => {
+                    if (index < this.ammo) {
+                        icon.setTexture('bala_cargada');
+                    } else {
+                        icon.setTexture('bala_gastada');
+                    }
+                });
+            }
+
             // Obtener display de vidas
             getLivesDisplay() {
                 return '❤️'.repeat(this.lives) + '🖤'.repeat(CONFIG.maxLives - this.lives);
@@ -361,14 +391,18 @@
             // SHOOT: Lógica de disparo
             // =========================================
             shoot(pointer) {
+                // Si está recargando, cancelar recarga y disparar si hay balas
+                if (this.isReloading && this.ammo > 0) {
+                    this.isReloading = false;
+                }
+
                 if (this.ammo <= 0 || this.isReloading) {
-                    // Quizás un sonido de "click" vacío aquí
                     return;
                 }
 
                 // Gastar bala
                 this.ammo--;
-                this.ammoText.setText(this.getAmmoDisplay());
+                this.updateAmmoHUD();
 
                 // Reproducir animación de disparo de la escopeta
                 this.shotgun.play('shoot_anim');
@@ -462,7 +496,7 @@
                     if (this.gameOver || !this.isReloading) return;
 
                     this.ammo++;
-                    this.ammoText.setText(this.getAmmoDisplay());
+                    this.updateAmmoHUD();
 
                     // Efecto visual de recarga (mover shotgun un poco)
                     this.tweens.add({
