@@ -50,6 +50,8 @@
             chickenSpeed: { min: 150, max: 300 },
             pointsRange: { min: 10, max: 20 },
             maxLives: 3,
+            maxAmmo: 6,
+            reloadDelay: 400,           // Tiempo por cada bala recargada
             recoilAmount: 15,
             recoilDuration: 100
         };
@@ -60,6 +62,8 @@
                 super({ key: 'GameScene' });
                 this.score = 0;
                 this.lives = CONFIG.maxLives;
+                this.ammo = CONFIG.maxAmmo;
+                this.isReloading = false;
                 this.currentSpawnDelay = CONFIG.initialSpawnDelay;
                 this.gameOver = false;
                 this.shotgunBaseY = 0;
@@ -229,12 +233,34 @@
                     strokeThickness: 3
                 }).setDepth(300);
 
+                // UI: Munición
+                this.ammoText = this.add.text(20, 100, this.getAmmoDisplay(), {
+                    fontSize: '24px',
+                    fontFamily: 'Arial Black',
+                    fill: '#ffcc00',
+                    stroke: '#000000',
+                    strokeThickness: 3
+                }).setDepth(300);
+
                 // Disparo
                 this.input.on('pointerdown', (pointer) => {
-                    if (!this.gameOver && pointer.leftButtonDown()) {
+                    if (this.gameOver) return;
+
+                    if (pointer.leftButtonDown()) {
                         this.shoot(pointer);
+                    } else if (pointer.rightButtonDown()) {
+                        this.startReload();
                     }
                 });
+
+                // Tecla R para recargar
+                this.reloadKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+                this.reloadKey.on('down', () => {
+                    if (!this.gameOver) this.startReload();
+                });
+
+                // Desactivar menú contextual para poder usar click derecho
+                this.input.mouse.disableContextMenu();
 
                 // Timer
                 this.spawnTimer = this.time.addEvent({
@@ -266,6 +292,11 @@
                 return '❤️'.repeat(this.lives) + '🖤'.repeat(CONFIG.maxLives - this.lives);
             }
 
+            // Obtener display de munición
+            getAmmoDisplay() {
+                return '🧱'.repeat(this.ammo) + '⚪'.repeat(CONFIG.maxAmmo - this.ammo);
+            }
+
             // =========================================
             // SPAWN: Generar gallinas
             // =========================================
@@ -288,7 +319,7 @@
                 // Variar el tamaño para efecto de profundidad (más pequeña = más lejos)
                 const scale = Phaser.Math.FloatBetween(0.15, 0.4);
                 chicken.setScale(scale);
-                
+
                 // Ajustar profundidad: más pequeñas detrás de las más grandes
                 // Los planos van de 10 a 90 (la escopeta está en 100)
                 chicken.setDepth(10 + (scale * 200));
@@ -296,7 +327,7 @@
                 // Velocidad: las que están "lejos" parecen moverse un poco más lento
                 const speedMultiplier = Phaser.Math.Linear(0.7, 1, (scale - 0.15) / 0.25);
                 chicken.setVelocityX(velocityX * speedMultiplier);
-                
+
                 chicken.setInteractive({ useHandCursor: false });
                 chicken.fromLeft = fromLeft;
 
@@ -330,6 +361,15 @@
             // SHOOT: Lógica de disparo
             // =========================================
             shoot(pointer) {
+                if (this.ammo <= 0 || this.isReloading) {
+                    // Quizás un sonido de "click" vacío aquí
+                    return;
+                }
+
+                // Gastar bala
+                this.ammo--;
+                this.ammoText.setText(this.getAmmoDisplay());
+
                 // Reproducir animación de disparo de la escopeta
                 this.shotgun.play('shoot_anim');
 
@@ -399,6 +439,44 @@
                     duration: 800,
                     ease: 'Power2',
                     onComplete: () => pointsText.destroy()
+                });
+            }
+
+            // =========================================
+            // RELOAD: Lógica de recarga 1 a 1
+            // =========================================
+            startReload() {
+                if (this.isReloading || this.ammo >= CONFIG.maxAmmo) return;
+
+                this.isReloading = true;
+                this.reloadNext();
+            }
+
+            reloadNext() {
+                if (this.gameOver || !this.isReloading || this.ammo >= CONFIG.maxAmmo) {
+                    this.isReloading = false;
+                    return;
+                }
+
+                this.time.delayedCall(CONFIG.reloadDelay, () => {
+                    if (this.gameOver || !this.isReloading) return;
+
+                    this.ammo++;
+                    this.ammoText.setText(this.getAmmoDisplay());
+
+                    // Efecto visual de recarga (mover shotgun un poco)
+                    this.tweens.add({
+                        targets: this.shotgun,
+                        y: this.shotgunBaseY + 5,
+                        duration: 100,
+                        yoyo: true
+                    });
+
+                    if (this.ammo < CONFIG.maxAmmo) {
+                        this.reloadNext();
+                    } else {
+                        this.isReloading = false;
+                    }
                 });
             }
 
@@ -485,6 +563,8 @@
                     this.scene.restart();
                     this.score = 0;
                     this.lives = CONFIG.maxLives;
+                    this.ammo = CONFIG.maxAmmo;
+                    this.isReloading = false;
                     this.currentSpawnDelay = CONFIG.initialSpawnDelay;
                     this.gameOver = false;
                 });
