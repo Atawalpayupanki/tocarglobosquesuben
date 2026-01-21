@@ -285,18 +285,27 @@
                 const chicken = this.chickens.create(startX, startY, 'gallina1');
                 chicken.play('gallina_fly'); // Reproducir animación
 
-                chicken.setScale(0.4);
-                chicken.setVelocityX(velocityX);
+                // Variar el tamaño para efecto de profundidad (más pequeña = más lejos)
+                const scale = Phaser.Math.FloatBetween(0.15, 0.4);
+                chicken.setScale(scale);
+                
+                // Ajustar profundidad: más pequeñas detrás de las más grandes
+                // Los planos van de 10 a 90 (la escopeta está en 100)
+                chicken.setDepth(10 + (scale * 200));
+
+                // Velocidad: las que están "lejos" parecen moverse un poco más lento
+                const speedMultiplier = Phaser.Math.Linear(0.7, 1, (scale - 0.15) / 0.25);
+                chicken.setVelocityX(velocityX * speedMultiplier);
+                
                 chicken.setInteractive({ useHandCursor: false });
                 chicken.fromLeft = fromLeft;
 
-                // Flip si va hacia la izquierda (asumiendo que las imágenes miran a la derecha por defecto)
-                // Si las imágenes originales miran a la derecha, flipX true lo hace mirar a la izquierda
+                // Flip si va hacia la izquierda
                 if (!fromLeft) {
                     chicken.setFlipX(true);
                 }
 
-                // Ajustar hitbox
+                // Ajustar hitbox proporcional al tamaño
                 chicken.body.setSize(chicken.width * 0.8, chicken.height * 0.8);
                 chicken.body.setOffset(chicken.width * 0.1, chicken.height * 0.1);
 
@@ -348,10 +357,10 @@
                 this.featherEmitter.setPosition(x, y);
                 this.featherEmitter.explode(15);
 
-                // Reproducir animación de explosión
+                // Reproducir animación de explosión escalada al tamaño de la gallina
                 const explosion = this.add.sprite(x, y, 'explosion1')
-                    .setScale(0.5)
-                    .setDepth(40)
+                    .setScale(chicken.scale * 1.25)
+                    .setDepth(chicken.depth + 1)
                     .setFlipX(isFlipped); // Mantener la misma orientación que la gallina
 
                 explosion.play('explosion_anim');
