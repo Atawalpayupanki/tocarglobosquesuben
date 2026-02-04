@@ -67,6 +67,7 @@
                 this.currentSpawnDelay = CONFIG.initialSpawnDelay;
                 this.gameOver = false;
                 this.shotgunBaseY = 0;
+                this.currentShootSound = null; // Referencia al sonido de disparo actual
             }
 
             // =========================================
@@ -102,6 +103,12 @@
                 // Cargar balas
                 this.load.image('bala_cargada', 'assets/bala_cargada.png');
                 this.load.image('bala_gastada', 'assets/bala_gastada.png');
+
+                // Cargar audios
+                this.load.audio('disparo', 'assets/disparo.mp3');
+                this.load.audio('muerte1', 'assets/muerte1.mp3');
+                this.load.audio('muerte2', 'assets/muerte2.mp3');
+                this.load.audio('recargar', 'assets/Recargar.mp3');
             }
 
             createLoadingBar() {
@@ -212,7 +219,8 @@
 
                 // Mira
                 this.crosshair = this.add.image(0, 0, 'mira')
-                    .setScale(0.15)
+                    .setScale(0.3)
+                    .setTint(0xffff00)
                     .setDepth(200);
 
                 // Ocultar cursor
@@ -402,6 +410,15 @@
                 // Reproducir animación de disparo de la escopeta
                 this.shotgun.play('shoot_anim');
 
+                // Detener sonido de disparo anterior si existe
+                if (this.currentShootSound) {
+                    this.currentShootSound.stop();
+                }
+
+                // Sonido de disparo
+                this.currentShootSound = this.sound.add('disparo');
+                this.currentShootSound.play({ volume: 0.3 });
+
                 // Detectar si impactó alguna gallina
                 let hitChicken = null;
 
@@ -441,6 +458,10 @@
 
                 // Destruir la gallina original
                 chicken.destroy();
+
+                // Sonido de muerte aleatorio
+                const deathSound = Phaser.Math.RND.pick(['muerte1', 'muerte2']);
+                this.sound.play(deathSound, { volume: 5 });
 
                 // Sumar puntos
                 const points = Phaser.Math.Between(CONFIG.pointsRange.min, CONFIG.pointsRange.max);
@@ -492,6 +513,9 @@
 
                     this.ammo++;
                     this.updateAmmoHUD();
+
+                    // Sonido de recarga
+                    this.sound.play('recargar');
 
                     // Efecto visual de recarga (mover shotgun un poco)
                     this.tweens.add({
