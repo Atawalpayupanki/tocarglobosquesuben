@@ -45,13 +45,16 @@
             width: 1024,
             height: 576,
             initialSpawnDelay: 2000,    // Tiempo inicial entre gallinas (ms)
-            minSpawnDelay: 500,         // Tiempo mínimo entre gallinas
+            minSpawnDelay: 800,         // Tiempo mínimo entre gallinas
             spawnAcceleration: 50,      // Reducción del delay por cada gallina
-            chickenSpeed: { min: 150, max: 300 },
+            difficultyScalingSpeed: 0.5,  // Velocidad de escalada (1 = normal, 2 = doble, 0.5 = mitad)
+            chickenSpeed: { min: 150, max: 400 },
+            maxChickenSpeed: { min: 400, max: 700 }, // Velocidad máxima en dificultad alta
             pointsRange: { min: 10, max: 20 },
             maxLives: 3,
             maxAmmo: 6,
-            reloadDelay: 400,           // Tiempo por cada bala recargada
+            initialReloadDelay: 400,    // Tiempo inicial por cada bala recargada
+            minReloadDelay: 150,        // Tiempo mínimo de recarga (más rápido)
             recoilAmount: 15,
             recoilDuration: 100
         };
@@ -65,6 +68,7 @@
                 this.ammo = CONFIG.maxAmmo;
                 this.isReloading = false;
                 this.currentSpawnDelay = CONFIG.initialSpawnDelay;
+                this.currentReloadDelay = CONFIG.initialReloadDelay;
                 this.gameOver = false;
                 this.shotgunBaseY = 0;
                 this.currentShootSound = null; // Referencia al sonido de disparo actual
@@ -341,16 +345,31 @@
                 const startX = fromLeft ? -80 : CONFIG.width + 80;
                 const startY = Phaser.Math.Between(80, CONFIG.height - 200);
 
-                // Velocidad aleatoria
-                const speed = Phaser.Math.Between(CONFIG.chickenSpeed.min, CONFIG.chickenSpeed.max);
+                // Calcular dificultad actual (0 = inicio, 1 = máxima dificultad)
+                // A mayor dificultad (menor spawn delay), mayor velocidad y menor tamaño
+                const difficultyRatio = 1 - ((this.currentSpawnDelay - CONFIG.minSpawnDelay) /
+                    (CONFIG.initialSpawnDelay - CONFIG.minSpawnDelay));
+
+                // Calcular velocidad basada en la dificultad
+                const minSpeed = CONFIG.chickenSpeed.min +
+                    (difficultyRatio * (CONFIG.maxChickenSpeed.min - CONFIG.chickenSpeed.min));
+                const maxSpeed = CONFIG.chickenSpeed.max +
+                    (difficultyRatio * (CONFIG.maxChickenSpeed.max - CONFIG.chickenSpeed.max));
+
+                const speed = Phaser.Math.Between(minSpeed, maxSpeed);
                 const velocityX = fromLeft ? speed : -speed;
 
                 // Crear gallina usando animación
                 const chicken = this.chickens.create(startX, startY, 'gallina1');
                 chicken.play('gallina_fly'); // Reproducir animación
 
-                // Variar el tamaño para efecto de profundidad (más pequeña = más lejos)
-                const scale = Phaser.Math.FloatBetween(0.15, 0.4);
+                // Variar el tamaño basado en la dificultad y profundidad
+                // A mayor dificultad, gallinas más pequeñas (más difíciles de acertar)
+                // Escala inicial: 0.15-0.4, Escala en dificultad máxima: 0.1-0.3
+                const minScale = 0.15 - (difficultyRatio * 0.05); // De 0.15 a 0.1
+                const maxScale = 0.4 - (difficultyRatio * 0.1);   // De 0.4 a 0.3
+
+                const scale = Phaser.Math.FloatBetween(minScale, maxScale);
                 chicken.setScale(scale);
 
                 // Ajustar profundidad: más pequeñas detrás de las más grandes
@@ -383,10 +402,18 @@
                     ease: 'Sine.easeInOut'
                 });
 
-                // Acelerar spawn
+                // Acelerar spawn y recarga
                 if (this.currentSpawnDelay > CONFIG.minSpawnDelay) {
-                    this.currentSpawnDelay -= CONFIG.spawnAcceleration;
+                    // Aplicar velocidad de escalada configurable
+                    this.currentSpawnDelay -= (CONFIG.spawnAcceleration * CONFIG.difficultyScalingSpeed);
                     this.spawnTimer.delay = Math.max(this.currentSpawnDelay, CONFIG.minSpawnDelay);
+
+                    // Calcular velocidad de recarga proporcional a la dificultad
+                    // A medida que el spawn se acelera, la recarga también se acelera
+                    const difficultyRatio = (CONFIG.initialSpawnDelay - this.currentSpawnDelay) /
+                        (CONFIG.initialSpawnDelay - CONFIG.minSpawnDelay);
+                    this.currentReloadDelay = CONFIG.initialReloadDelay -
+                        (difficultyRatio * (CONFIG.initialReloadDelay - CONFIG.minReloadDelay));
                 }
             }
 
@@ -417,7 +444,7 @@
 
                 // Sonido de disparo
                 this.currentShootSound = this.sound.add('disparo');
-                this.currentShootSound.play({ volume: 0.3 });
+                this.currentShootSound.play({ volume: 0.5 });
 
                 // Detectar si impactó alguna gallina
                 let hitChicken = null;
@@ -508,7 +535,7 @@
                     return;
                 }
 
-                this.time.delayedCall(CONFIG.reloadDelay, () => {
+                this.time.delayedCall(this.currentReloadDelay, () => {
                     if (this.gameOver || !this.isReloading) return;
 
                     this.ammo++;
@@ -619,6 +646,7 @@
                     this.ammo = CONFIG.maxAmmo;
                     this.isReloading = false;
                     this.currentSpawnDelay = CONFIG.initialSpawnDelay;
+                    this.currentReloadDelay = CONFIG.initialReloadDelay;
                     this.gameOver = false;
                 });
 
